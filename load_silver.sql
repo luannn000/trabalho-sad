@@ -21,19 +21,20 @@ CREATE TABLE IF NOT EXISTS silver.users (
 
 -- IMDB_MOVIES
 CREATE TABLE IF NOT EXISTS silver.imdb_movies (
-    id              VARCHAR(20),
-    title           VARCHAR(500),
-    rating          DECIMAL(3,1),
-    votes           BIGINT,
-    meta_score      DECIMAL(4,1),
-    genres          TEXT,
-    release_date    DATE,
-    ano_lancamento  INTEGER,
-    mes_lancamento  INTEGER,
-    dia_lancamento  INTEGER,
-    budget          DECIMAL(15,2),
-    gross_worldwide DECIMAL(15,2),
-    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    id               VARCHAR(20),
+    title            VARCHAR(500),
+    rating           DECIMAL(3,1),
+    votes            BIGINT,
+    meta_score       DECIMAL(4,1),
+    genres           TEXT[],
+    release_date     DATE,
+    ano_lancamento   INTEGER,
+    mes_lancamento   INTEGER,
+    dia_lancamento   INTEGER,
+    budget_currency  VARCHAR(10),
+    budget           DECIMAL(15,2),
+    gross_worldwide  DECIMAL(15,2),
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- RT_REVIEWS
@@ -48,26 +49,26 @@ CREATE TABLE IF NOT EXISTS silver.rt_reviews (
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
---RT_MOVIES
+-- RT_MOVIES
 CREATE TABLE IF NOT EXISTS silver.rt_movies (
     id             VARCHAR(200),
     title          VARCHAR(500),
     audience_score DECIMAL(5,1),
     tomato_meter   DECIMAL(5,1),
     rating         VARCHAR(20),
-    genre          TEXT,
+    genre          TEXT[],
     director       VARCHAR(500),
     box_office     DECIMAL(15,2),
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
---LB_MOVIE_DATA
+-- LB_MOVIE_DATA
 CREATE TABLE IF NOT EXISTS silver.lb_movie_data (
     id           VARCHAR(50),
     imdb_id      VARCHAR(20),
     movie_id     VARCHAR(200),
     movie_title  VARCHAR(500),
-    genres       TEXT,
+    genres       TEXT[],
     vote_average DECIMAL(4,1),
     vote_count   BIGINT,
     release_date DATE,
@@ -76,7 +77,7 @@ CREATE TABLE IF NOT EXISTS silver.lb_movie_data (
     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- APAGA TODOS OS DADOS
+-- DELETA INFORMAÇÕES ANTERIORES
 TRUNCATE TABLE
     silver.ratings,
     silver.users,
@@ -119,24 +120,32 @@ FROM bronze.lb_users_export;
 INSERT INTO silver.imdb_movies (
     id, title, rating, votes, meta_score, genres,
     release_date, ano_lancamento, mes_lancamento, dia_lancamento,
-    budget, gross_worldwide
+    budget_currency, budget, gross_worldwide
 )
 SELECT
     id,
     title,
-
     rating::DECIMAL(3,1),
 
     CASE
         WHEN votes LIKE '%M' THEN (REPLACE(votes, 'M', '')::DECIMAL(10,2) * 1000000)::BIGINT
         WHEN votes LIKE '%K' THEN (REPLACE(votes, 'K', '')::DECIMAL(10,2) * 1000)::BIGINT
-        WHEN votes ~ '^[0-9]+$'  THEN votes::BIGINT
+        WHEN votes ~ '^[0-9]+$' THEN votes::BIGINT
         ELSE NULL
     END,
 
     "méta_score"::DECIMAL(4,1),
 
-    genres,
+    CASE
+        WHEN genres IS NULL OR TRIM(genres) = '' THEN NULL
+        ELSE STRING_TO_ARRAY(
+            TRIM(REGEXP_REPLACE(
+                REGEXP_REPLACE(genres, '[''"\[\]]', '', 'g'),
+                '\s*,\s*', ',', 'g'
+            )),
+            ','
+        )
+    END,
 
     CASE WHEN release_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
          THEN release_date::DATE ELSE NULL END,
@@ -148,19 +157,24 @@ SELECT
          THEN EXTRACT(DAY   FROM release_date::DATE)::INTEGER ELSE NULL END,
 
     CASE
+        WHEN budget IS NULL OR TRIM(budget) = ''   THEN NULL
+        WHEN budget ~ '^\$'                        THEN 'USD'
+        WHEN budget ~ '^€'                         THEN 'EUR'
+        WHEN budget ~ '^£'                         THEN 'GBP'
+        WHEN budget ~ '^₩'                         THEN 'KRW'
+        WHEN budget ~* '^HUF'                      THEN 'HUF'
+        WHEN budget ~* '^[A-Z]{3}[0-9]'            THEN UPPER(SUBSTRING(budget, 1, 3))
+        ELSE 'UNKNOWN'
+    END,
+
+    CASE
         WHEN budget IS NULL OR TRIM(budget) = '' THEN NULL
-        ELSE NULLIF(
-            TRIM(REGEXP_REPLACE(budget, '[^0-9.]', '', 'g')),
-            ''
-        )::DECIMAL(15,2)
+        ELSE NULLIF(TRIM(REGEXP_REPLACE(budget, '[^0-9.]', '', 'g')), '')::DECIMAL(15,2)
     END,
 
     CASE
         WHEN gross_worldwide IS NULL OR TRIM(gross_worldwide) = '' THEN NULL
-        ELSE NULLIF(
-            TRIM(REGEXP_REPLACE(gross_worldwide, '[^0-9.]', '', 'g')),
-            ''
-        )::DECIMAL(15,2)
+        ELSE NULLIF(TRIM(REGEXP_REPLACE(gross_worldwide, '[^0-9.]', '', 'g')), '')::DECIMAL(15,2)
     END
 
 FROM bronze.imdb_movies;
@@ -209,7 +223,7 @@ INSERT INTO silver.rt_movies (
     id, title, audience_score, tomato_meter,
     rating, genre, director, box_office
 )
-SELECT
+SELECT DISTINCT ON (id)
     id,
     title,
 
@@ -217,44 +231,37 @@ SELECT
          THEN "audienceScore"::DECIMAL(5,1) ELSE NULL END,
 
     CASE WHEN "tomatoMeter"::TEXT ~ '^[0-9]+(\.[0-9]+)?$'
-         THEN "tomatoMeter"::DECIMAL(5,1)  ELSE NULL END,
+         THEN "tomatoMeter"::DECIMAL(5,1) ELSE NULL END,
 
-    rating,
-    genre,
-    director,
+    NULLIF(TRIM(rating), ''),
 
     CASE
-        WHEN cleaned_box_office IS NULL
-          OR cleaned_box_office = '' THEN NULL
+        WHEN genre IS NULL OR TRIM(genre) = '' THEN NULL
+        ELSE STRING_TO_ARRAY(
+            TRIM(REGEXP_REPLACE(genre, '\s*,\s*', ',', 'g')),
+            ','
+        )
+    END,
 
+    NULLIF(TRIM(director), ''),
+
+    CASE
+        WHEN cleaned_box_office IS NULL OR cleaned_box_office = '' THEN NULL
         WHEN cleaned_box_office LIKE '%M' THEN
-            NULLIF(
-                TRIM(REGEXP_REPLACE(REPLACE(cleaned_box_office, 'M', ''), '[^0-9.]', '', 'g')),
-                ''
-            )::DECIMAL(15,2) * 1000000
-
+            NULLIF(TRIM(REGEXP_REPLACE(REPLACE(cleaned_box_office, 'M', ''), '[^0-9.]', '', 'g')), '')::DECIMAL(15,2) * 1000000
         WHEN cleaned_box_office LIKE '%K' THEN
-            NULLIF(
-                TRIM(REGEXP_REPLACE(REPLACE(cleaned_box_office, 'K', ''), '[^0-9.]', '', 'g')),
-                ''
-            )::DECIMAL(15,2) * 1000
-
+            NULLIF(TRIM(REGEXP_REPLACE(REPLACE(cleaned_box_office, 'K', ''), '[^0-9.]', '', 'g')), '')::DECIMAL(15,2) * 1000
         ELSE
-            NULLIF(
-                TRIM(REGEXP_REPLACE(cleaned_box_office, '[^0-9.]', '', 'g')),
-                ''
-            )::DECIMAL(15,2)
+            NULLIF(TRIM(REGEXP_REPLACE(cleaned_box_office, '[^0-9.]', '', 'g')), '')::DECIMAL(15,2)
     END
 
 FROM (
     SELECT
         *,
-        NULLIF(
-            TRIM(REPLACE(REPLACE("boxOffice"::TEXT, '"', ''), ' ', '')),
-            ''
-        ) AS cleaned_box_office
+        NULLIF(TRIM(REPLACE(REPLACE("boxOffice"::TEXT, '"', ''), ' ', '')), '') AS cleaned_box_office
     FROM bronze.rt_movies
-) sub;
+) sub
+ORDER BY id;
 
 -- INSERE LB_MOVIES_DATA
 INSERT INTO silver.lb_movie_data (
@@ -263,37 +270,53 @@ INSERT INTO silver.lb_movie_data (
 )
 SELECT
     _id,
-    imdb_id,
+
+    NULLIF(TRIM(imdb_id::TEXT), ''),
+
     movie_id,
     movie_title,
-    genres,
+
+    CASE
+        WHEN genres IS NULL                          THEN NULL
+        WHEN TRIM(genres::TEXT) = ''                THEN NULL
+        WHEN TRIM(genres::TEXT) = '{}'              THEN NULL
+        WHEN TRIM(genres::TEXT) = '{"null"}'        THEN NULL
+        WHEN LOWER(TRIM(genres::TEXT)) LIKE '%null%' THEN NULL
+        ELSE (
+            SELECT ARRAY_AGG(TRIM(g))
+            FROM UNNEST(
+                STRING_TO_ARRAY(
+                    TRIM(REGEXP_REPLACE(genres::TEXT, '[{}"]', '', 'g')),
+                    ','
+                )
+            ) AS g
+            WHERE TRIM(g) != ''
+              AND LOWER(TRIM(g)) != 'null'
+        )
+    END,
+
     vote_average::DECIMAL(4,1),
     vote_count::BIGINT,
     release_date::DATE,
     popularity::DECIMAL(10,2),
-    runtime::INTEGER
+
+    CASE WHEN runtime = 0 THEN NULL ELSE runtime END
 
 FROM bronze.lb_movie_data;
 
--- CRIAÇÃO DE ÍNDICES
-CREATE INDEX IF NOT EXISTS idx_silver_ratings_movie     ON silver.ratings(movie_id);
-CREATE INDEX IF NOT EXISTS idx_silver_ratings_user      ON silver.ratings(user_id);
-CREATE INDEX IF NOT EXISTS idx_silver_imdb_id           ON silver.imdb_movies(id);
-CREATE INDEX IF NOT EXISTS idx_silver_imdb_release      ON silver.imdb_movies(ano_lancamento);
-CREATE INDEX IF NOT EXISTS idx_silver_rt_reviews_critic ON silver.rt_reviews(critic_name);
-CREATE INDEX IF NOT EXISTS idx_silver_rt_movies_title   ON silver.rt_movies(title);
-CREATE INDEX IF NOT EXISTS idx_silver_lb_imdb           ON silver.lb_movie_data(imdb_id);
-CREATE INDEX IF NOT EXISTS idx_silver_lb_movie_id       ON silver.lb_movie_data(movie_id);
+-- ÍNDICES
+CREATE INDEX IF NOT EXISTS idx_silver_ratings_movie      ON silver.ratings(movie_id);
+CREATE INDEX IF NOT EXISTS idx_silver_ratings_user       ON silver.ratings(user_id);
+CREATE INDEX IF NOT EXISTS idx_silver_imdb_id            ON silver.imdb_movies(id);
+CREATE INDEX IF NOT EXISTS idx_silver_imdb_release       ON silver.imdb_movies(ano_lancamento);
+CREATE INDEX IF NOT EXISTS idx_silver_imdb_currency      ON silver.imdb_movies(budget_currency);
+CREATE INDEX IF NOT EXISTS idx_silver_rt_reviews_critic  ON silver.rt_reviews(critic_name);
+CREATE INDEX IF NOT EXISTS idx_silver_rt_movies_id       ON silver.rt_movies(id);
+CREATE INDEX IF NOT EXISTS idx_silver_rt_movies_title    ON silver.rt_movies(title);
+CREATE INDEX IF NOT EXISTS idx_silver_lb_imdb            ON silver.lb_movie_data(imdb_id);
+CREATE INDEX IF NOT EXISTS idx_silver_lb_movie_id        ON silver.lb_movie_data(movie_id);
 
--- VALIDAÇÃO
-SELECT 'silver.ratings'       AS tabela, COUNT(*) AS total FROM silver.ratings
-UNION ALL
-SELECT 'silver.users',        COUNT(*) FROM silver.users
-UNION ALL
-SELECT 'silver.imdb_movies',  COUNT(*) FROM silver.imdb_movies
-UNION ALL
-SELECT 'silver.rt_reviews',   COUNT(*) FROM silver.rt_reviews
-UNION ALL
-SELECT 'silver.rt_movies',    COUNT(*) FROM silver.rt_movies
-UNION ALL
-SELECT 'silver.lb_movie_data',COUNT(*) FROM silver.lb_movie_data;
+-- ÍNDICE GIN
+CREATE INDEX IF NOT EXISTS idx_silver_imdb_genres ON silver.imdb_movies USING GIN(genres);
+CREATE INDEX IF NOT EXISTS idx_silver_rt_genre    ON silver.rt_movies   USING GIN(genre);
+CREATE INDEX IF NOT EXISTS idx_silver_lb_genres   ON silver.lb_movie_data USING GIN(genres);
