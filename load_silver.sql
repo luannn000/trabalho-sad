@@ -107,11 +107,11 @@ SELECT DISTINCT ON (username)
     display_name,
     CASE
         WHEN num_ratings_pages ~ '^[0-9]+$' THEN num_ratings_pages::INTEGER
-        ELSE NULL
+        ELSE 0
     END,
     CASE
         WHEN num_reviews ~ '^[0-9]+$' THEN num_reviews::INTEGER
-        ELSE NULL
+        ELSE 0
     END
 FROM bronze.lb_users_export;
 
