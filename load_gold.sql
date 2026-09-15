@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS gold.dim_date (
 
 -- DIMENSÃO MOVIE
 CREATE TABLE IF NOT EXISTS gold.dim_movie (
-    movie_key   SERIAL PRIMARY KEY,
+    movie_sk   SERIAL PRIMARY KEY,
     imdb_id     VARCHAR(20),
     rt_id       VARCHAR(200),
     lb_movie_id VARCHAR(200),
@@ -32,14 +32,14 @@ CREATE TABLE IF NOT EXISTS gold.dim_genre (
 
 -- PONTE MOVIE <-> GENERE
 CREATE TABLE IF NOT EXISTS gold.bridge_movie_genre (
-    movie_key INTEGER REFERENCES gold.dim_movie(movie_key),
+    movie_sk INTEGER REFERENCES gold.dim_movie(movie_sk),
     genre_key INTEGER REFERENCES gold.dim_genre(genre_key),
-    PRIMARY KEY (movie_key, genre_key)
+    PRIMARY KEY (movie_sk, genre_key)
 );
 
 -- FATO MOVIE_METRICS
 CREATE TABLE IF NOT EXISTS gold.fact_movie_metrics (
-    movie_key           INTEGER PRIMARY KEY REFERENCES gold.dim_movie(movie_key),
+    movie_sk           INTEGER PRIMARY KEY REFERENCES gold.dim_movie(movie_sk),
     release_date_key    INTEGER REFERENCES gold.dim_date(date_key),
     budget_currency     VARCHAR(10),
     budget_usd          DECIMAL(15,2),
@@ -125,8 +125,8 @@ WHERE TRIM(g) != ''
 ON CONFLICT (genre_name) DO NOTHING;
 
 -- INSERE PONTE MOVIE_GENRE
-INSERT INTO gold.bridge_movie_genre (movie_key, genre_key)
-SELECT DISTINCT m.movie_key, g.genre_key
+INSERT INTO gold.bridge_movie_genre (movie_sk, genre_key)
+SELECT DISTINCT m.movie_sk, g.genre_key
 FROM gold.dim_movie m
 JOIN silver.imdb_movies i   ON i.id = m.imdb_id
 JOIN UNNEST(i.genres) AS gn ON TRUE
@@ -135,7 +135,7 @@ WHERE i.genres IS NOT NULL
 
 UNION
 
-SELECT DISTINCT m.movie_key, g.genre_key
+SELECT DISTINCT m.movie_sk, g.genre_key
 FROM gold.dim_movie m
 JOIN silver.rt_movies r     ON r.id = m.rt_id
 JOIN UNNEST(r.genre) AS gn  ON TRUE
@@ -144,18 +144,18 @@ WHERE r.genre IS NOT NULL
 
 UNION
 
-SELECT DISTINCT m.movie_key, g.genre_key
+SELECT DISTINCT m.movie_sk, g.genre_key
 FROM gold.dim_movie m
 JOIN silver.lb_movie_data l ON l.movie_id = m.lb_movie_id
 JOIN UNNEST(l.genres) AS gn ON TRUE
 JOIN gold.dim_genre g       ON LOWER(TRIM(g.genre_name)) = LOWER(TRIM(gn))
 WHERE l.genres IS NOT NULL
 
-ON CONFLICT (movie_key, genre_key) DO NOTHING;
+ON CONFLICT (movie_sk, genre_key) DO NOTHING;
 
 -- INSERE FATO MOVIE_METRICS
 INSERT INTO gold.fact_movie_metrics (
-    movie_key, release_date_key,
+    movie_sk, release_date_key,
     budget_currency, budget_usd, gross_worldwide_usd, profit_usd, roi,
     imdb_rating, imdb_votes, imdb_meta_score,
     rt_tomato_meter, rt_audience_score, rt_review_count,
@@ -163,7 +163,7 @@ INSERT INTO gold.fact_movie_metrics (
     avg_user_rating, user_rating_count
 )
 SELECT
-    m.movie_key,
+    m.movie_sk,
     d.date_key,
     i.budget_currency,
     i.budget,
@@ -237,4 +237,4 @@ CREATE INDEX IF NOT EXISTS idx_dim_movie_lb    ON gold.dim_movie(lb_movie_id);
 CREATE INDEX IF NOT EXISTS idx_dim_date_year   ON gold.dim_date(year);
 CREATE INDEX IF NOT EXISTS idx_dim_genre_name  ON gold.dim_genre(genre_name);
 CREATE INDEX IF NOT EXISTS idx_bridge_genre    ON gold.bridge_movie_genre(genre_key);
-CREATE INDEX IF NOT EXISTS idx_bridge_movie    ON gold.bridge_movie_genre(movie_key);
+CREATE INDEX IF NOT EXISTS idx_bridge_movie    ON gold.bridge_movie_genre(movie_sk);
