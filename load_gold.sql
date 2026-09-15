@@ -2,7 +2,7 @@ CREATE SCHEMA IF NOT EXISTS gold;
 
 -- DIMENSÃO DATE
 CREATE TABLE IF NOT EXISTS gold.dim_date (
-    date_key    INTEGER PRIMARY KEY,
+    date_sk    INTEGER PRIMARY KEY,
     full_date   DATE,
     year        INTEGER,
     quarter     INTEGER,
@@ -26,21 +26,21 @@ CREATE TABLE IF NOT EXISTS gold.dim_movie (
 
 -- DIMENSÃO GENRE
 CREATE TABLE IF NOT EXISTS gold.dim_genre (
-    genre_key  SERIAL PRIMARY KEY,
+    genre_sk  SERIAL PRIMARY KEY,
     genre_name VARCHAR(100) UNIQUE
 );
 
 -- PONTE MOVIE <-> GENERE
 CREATE TABLE IF NOT EXISTS gold.bridge_movie_genre (
     movie_sk INTEGER REFERENCES gold.dim_movie(movie_sk),
-    genre_key INTEGER REFERENCES gold.dim_genre(genre_key),
-    PRIMARY KEY (movie_sk, genre_key)
+    genre_sk INTEGER REFERENCES gold.dim_genre(genre_sk),
+    PRIMARY KEY (movie_sk, genre_sk)
 );
 
 -- FATO MOVIE_METRICS
 CREATE TABLE IF NOT EXISTS gold.fact_movie_metrics (
     movie_sk           INTEGER PRIMARY KEY REFERENCES gold.dim_movie(movie_sk),
-    release_date_key    INTEGER REFERENCES gold.dim_date(date_key),
+    release_date_sk    INTEGER REFERENCES gold.dim_date(date_sk),
     budget_currency     VARCHAR(10),
     budget_usd          DECIMAL(15,2),
     gross_worldwide_usd DECIMAL(15,2),
@@ -74,7 +74,7 @@ WITH min_max_dates AS (
     FROM silver.imdb_movies
 )
 INSERT INTO gold.dim_date (
-    date_key, full_date, year, quarter,
+    date_sk, full_date, year, quarter,
     month, day, day_of_week, year_month
 )
 SELECT
@@ -125,8 +125,8 @@ WHERE TRIM(g) != ''
 ON CONFLICT (genre_name) DO NOTHING;
 
 -- INSERE PONTE MOVIE_GENRE
-INSERT INTO gold.bridge_movie_genre (movie_sk, genre_key)
-SELECT DISTINCT m.movie_sk, g.genre_key
+INSERT INTO gold.bridge_movie_genre (movie_sk, genre_sk)
+SELECT DISTINCT m.movie_sk, g.genre_sk
 FROM gold.dim_movie m
 JOIN silver.imdb_movies i   ON i.id = m.imdb_id
 JOIN UNNEST(i.genres) AS gn ON TRUE
@@ -135,7 +135,7 @@ WHERE i.genres IS NOT NULL
 
 UNION
 
-SELECT DISTINCT m.movie_sk, g.genre_key
+SELECT DISTINCT m.movie_sk, g.genre_sk
 FROM gold.dim_movie m
 JOIN silver.rt_movies r     ON r.id = m.rt_id
 JOIN UNNEST(r.genre) AS gn  ON TRUE
@@ -144,18 +144,18 @@ WHERE r.genre IS NOT NULL
 
 UNION
 
-SELECT DISTINCT m.movie_sk, g.genre_key
+SELECT DISTINCT m.movie_sk, g.genre_sk
 FROM gold.dim_movie m
 JOIN silver.lb_movie_data l ON l.movie_id = m.lb_movie_id
 JOIN UNNEST(l.genres) AS gn ON TRUE
 JOIN gold.dim_genre g       ON LOWER(TRIM(g.genre_name)) = LOWER(TRIM(gn))
 WHERE l.genres IS NOT NULL
 
-ON CONFLICT (movie_sk, genre_key) DO NOTHING;
+ON CONFLICT (movie_sk, genre_sk) DO NOTHING;
 
 -- INSERE FATO MOVIE_METRICS
 INSERT INTO gold.fact_movie_metrics (
-    movie_sk, release_date_key,
+    movie_sk, release_date_sk,
     budget_currency, budget_usd, gross_worldwide_usd, profit_usd, roi,
     imdb_rating, imdb_votes, imdb_meta_score,
     rt_tomato_meter, rt_audience_score, rt_review_count,
@@ -164,7 +164,7 @@ INSERT INTO gold.fact_movie_metrics (
 )
 SELECT
     m.movie_sk,
-    d.date_key,
+    d.date_sk,
     i.budget_currency,
     i.budget,
     i.gross_worldwide,
@@ -228,7 +228,7 @@ LEFT JOIN gold.dim_date d
        ON d.full_date = i.release_date;
 
 -- ÍNDICES
-CREATE INDEX IF NOT EXISTS idx_fact_date       ON gold.fact_movie_metrics(release_date_key);
+CREATE INDEX IF NOT EXISTS idx_fact_date       ON gold.fact_movie_metrics(release_date_sk);
 CREATE INDEX IF NOT EXISTS idx_fact_currency   ON gold.fact_movie_metrics(budget_currency);
 CREATE INDEX IF NOT EXISTS idx_dim_movie_title ON gold.dim_movie(title);
 CREATE INDEX IF NOT EXISTS idx_dim_movie_imdb  ON gold.dim_movie(imdb_id);
@@ -236,5 +236,5 @@ CREATE INDEX IF NOT EXISTS idx_dim_movie_rt    ON gold.dim_movie(rt_id);
 CREATE INDEX IF NOT EXISTS idx_dim_movie_lb    ON gold.dim_movie(lb_movie_id);
 CREATE INDEX IF NOT EXISTS idx_dim_date_year   ON gold.dim_date(year);
 CREATE INDEX IF NOT EXISTS idx_dim_genre_name  ON gold.dim_genre(genre_name);
-CREATE INDEX IF NOT EXISTS idx_bridge_genre    ON gold.bridge_movie_genre(genre_key);
+CREATE INDEX IF NOT EXISTS idx_bridge_genre    ON gold.bridge_movie_genre(genre_sk);
 CREATE INDEX IF NOT EXISTS idx_bridge_movie    ON gold.bridge_movie_genre(movie_sk);
