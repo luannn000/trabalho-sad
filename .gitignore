@@ -1,2 +1,4 @@
 .env
-/.streamlit
+/.streamlit/*
+!/.streamlit/secrets.toml.example
+.venv
