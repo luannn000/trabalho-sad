@@ -241,14 +241,14 @@ categoria = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("🎯 Filtros Globais")
+st.sidebar.subheader("Filtros Globais")
 
 # Obter limites dinâmicos de anos e lista de gêneros
 min_ano_db, max_ano_db = get_filter_bounds()
 lista_generos = get_available_genres()
 
 ano_range = st.sidebar.slider(
-    "📅 Período de Lançamento (Anos):",
+    "Período de Lançamento (Anos):",
     min_value=min_ano_db,
     max_value=max_ano_db,
     value=(min_ano_db, max_ano_db),
@@ -258,7 +258,7 @@ ano_range = st.sidebar.slider(
 ano_inicio, ano_fim = ano_range
 
 generos_selecionados = st.sidebar.multiselect(
-    "🎭 Gênero(s):",
+    "Gênero(s):",
     options=lista_generos,
     default=[],
     placeholder="Todos os gêneros (padrão)",
@@ -266,7 +266,7 @@ generos_selecionados = st.sidebar.multiselect(
 )
 
 top_n = st.sidebar.slider(
-    "📊 Quantidade nos Rankings (Top N):",
+    "Quantidade nos Rankings (Top N):",
     min_value=5,
     max_value=50,
     value=15,
@@ -282,7 +282,7 @@ top_n_generos = 10
 
 if categoria == "Críticas":
     st.sidebar.markdown("---")
-    st.sidebar.subheader("🔍 Filtros de Críticas")
+    st.sidebar.subheader("Filtros de Críticas")
     min_fontes = st.sidebar.slider(
         "Mínimo de Fontes de Avaliação:",
         min_value=1,
@@ -300,7 +300,7 @@ if categoria == "Críticas":
 
 elif categoria == "Dinheiro":
     st.sidebar.markdown("---")
-    st.sidebar.subheader("🔍 Filtros Financeiros")
+    st.sidebar.subheader("Filtros Financeiros")
     busca_dinheiro = st.sidebar.text_input(
         "Buscar Filme por Título:",
         placeholder="Ex: Titanic, Avatar, Avengers...",
@@ -309,7 +309,7 @@ elif categoria == "Dinheiro":
 
 elif categoria == "Gênero":
     st.sidebar.markdown("---")
-    st.sidebar.subheader("🔍 Filtros de Gênero")
+    st.sidebar.subheader("Filtros de Gênero")
     top_n_generos = st.sidebar.slider(
         "Gêneros nos Gráficos (Top N):",
         min_value=5,
@@ -322,7 +322,7 @@ elif categoria == "Gênero":
 st.sidebar.markdown("---")
 
 # Botão para Redefinir Filtros
-if st.sidebar.button("🔄 Redefinir Filtros", use_container_width=True):
+if st.sidebar.button("Redefinir Filtros", use_container_width=True):
     for k in ["filter_ano", "filter_genero", "filter_top_n", "filter_min_fontes", "filter_busca_criticas", "filter_busca_dinheiro", "filter_top_generos"]:
         if k in st.session_state:
             del st.session_state[k]
@@ -331,22 +331,22 @@ if st.sidebar.button("🔄 Redefinir Filtros", use_container_width=True):
 # Resumo dos filtros ativos na barra lateral
 filtros_ativos = []
 if ano_inicio != min_ano_db or ano_fim != max_ano_db:
-    filtros_ativos.append(f"📅 **Anos:** {ano_inicio} - {ano_fim}")
+    filtros_ativos.append(f"Anos: {ano_inicio} - {ano_fim}")
 if generos_selecionados:
     if len(generos_selecionados) <= 3:
-        filtros_ativos.append(f"🎭 **Gêneros:** {', '.join(generos_selecionados)}")
+        filtros_ativos.append(f"Gêneros: {', '.join(generos_selecionados)}")
     else:
-        filtros_ativos.append(f"🎭 **Gêneros:** {len(generos_selecionados)} selecionados")
+        filtros_ativos.append(f"Gêneros: {len(generos_selecionados)} selecionados")
 if categoria == "Críticas":
     if min_fontes > 1:
-        filtros_ativos.append(f"⭐ **Fontes mínimas:** {min_fontes}")
+        filtros_ativos.append(f"Fontes mínimas: {min_fontes}")
     if busca_criticas:
-        filtros_ativos.append(f"🔎 **Busca:** '{busca_criticas}'")
+        filtros_ativos.append(f"Busca: '{busca_criticas}'")
 elif categoria == "Dinheiro" and busca_dinheiro:
-    filtros_ativos.append(f"🔎 **Busca:** '{busca_dinheiro}'")
+    filtros_ativos.append(f"Busca: '{busca_dinheiro}'")
 
 if filtros_ativos:
-    st.sidebar.info("**Filtros em Ação:**\n\n" + "\n\n".join(filtros_ativos))
+    st.sidebar.info("\nFiltros em Ação:\n\n" + "\n\n".join(filtros_ativos))
 
 # ==================== CABEÇALHO DA PÁGINA ====================
 st.title("Dashboard de Análise de Filmes")
@@ -356,7 +356,7 @@ st.markdown("---")
 if categoria == "Visão Geral":
     st.header("Resumo do Data Warehouse")
     
-    st.markdown("##### 🌐 Totais Globais da Camada Gold")
+    st.markdown("##### Totais Globais da Camada Gold")
     col1, col2, col3 = st.columns(3)
     
     total_filmes = conn.query("SELECT COUNT(*) FROM gold.dim_movie").iloc[0, 0]
@@ -368,7 +368,7 @@ if categoria == "Visão Geral":
     col3.metric("Anos com Registros", anos_cobertos)
     
     st.markdown("---")
-    st.markdown(f"##### 🎯 Indicadores do Recorte Filtrado ({ano_inicio} a {ano_fim})")
+    st.markdown(f"##### Indicadores do Recorte Filtrado ({ano_inicio} a {ano_fim})")
     
     query_resumo = build_resumo_filtrado_query(ano_inicio, ano_fim, generos_selecionados)
     df_resumo = run_query(query_resumo)
@@ -397,7 +397,7 @@ elif categoria == "Críticas":
     df_evolucao = run_query(query_evolucao)
     
     if df_evolucao.empty:
-        st.warning("⚠️ Nenhum dado encontrado para o período e gêneros selecionados.")
+        st.warning("Nenhum dado encontrado para o período e gêneros selecionados.")
     else:
         df_evolucao_renamed = df_evolucao.rename(columns={
             "avg_imdb_rating": "IMDB (0-10)",
@@ -431,7 +431,7 @@ elif categoria == "Críticas":
     df_melhores = run_query(query_melhores)
     
     if df_melhores.empty:
-        st.warning("⚠️ Nenhum filme encontrado com os critérios de busca e filtros selecionados.")
+        st.warning("Nenhum filme encontrado com os critérios de busca e filtros selecionados.")
     else:
         df_melhores_display = df_melhores.copy()
         df_melhores_display['imdb_rating'] = df_melhores_display['imdb_rating'].apply(format_decimal)
@@ -460,7 +460,7 @@ elif categoria == "Dinheiro":
     df_fin_ano = run_query(query_fin)
     
     if df_fin_ano.empty:
-        st.warning("⚠️ Nenhum dado financeiro encontrado para o período e gêneros selecionados.")
+        st.warning("Nenhum dado financeiro encontrado para o período e gêneros selecionados.")
     else:
         df_fin_melt = df_fin_ano.melt(
             id_vars=["year"], 
@@ -506,7 +506,7 @@ elif categoria == "Dinheiro":
     df_top_lucro = run_query(query_top_lucro)
     
     if df_top_lucro.empty:
-        st.warning("⚠️ Nenhum filme encontrado com os critérios de busca e filtros selecionados.")
+        st.warning("Nenhum filme encontrado com os critérios de busca e filtros selecionados.")
     else:
         df_top_lucro_display = df_top_lucro.copy()
         for col in ['budget_usd', 'gross_worldwide_usd', 'profit_usd']:
@@ -545,7 +545,7 @@ elif categoria == "Gênero":
         df_gen_total = run_query(query_gen_total)
         
         if df_gen_total.empty:
-            st.warning("⚠️ Nenhum dado de gênero encontrado para o período e filtros atuais.")
+            st.warning("Nenhum dado de gênero encontrado para o período e filtros atuais.")
         else:
             fig_gen_total = px.bar(
                 df_gen_total, 
@@ -566,7 +566,7 @@ elif categoria == "Gênero":
         df_gen_medio = run_query(query_gen_medio)
         
         if df_gen_medio.empty:
-            st.warning("⚠️ Nenhum dado de gênero encontrado para o período e filtros atuais.")
+            st.warning("Nenhum dado de gênero encontrado para o período e filtros atuais.")
         else:
             df_gen_medio_renamed = df_gen_medio.rename(columns={
                 "avg_profit_usd": "Lucro Médio",
