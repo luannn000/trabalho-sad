@@ -247,13 +247,22 @@ st.sidebar.subheader("Filtros Globais")
 min_ano_db, max_ano_db = get_filter_bounds()
 lista_generos = get_available_genres()
 
+# Estado para controle e reinicialização completa dos filtros
+if "filter_reset_count" not in st.session_state:
+    st.session_state.filter_reset_count = 0
+
+def reset_filters():
+    st.session_state.filter_reset_count += 1
+
+frc = st.session_state.filter_reset_count
+
 ano_range = st.sidebar.slider(
     "Período de Lançamento (Anos):",
     min_value=min_ano_db,
     max_value=max_ano_db,
     value=(min_ano_db, max_ano_db),
     step=1,
-    key="filter_ano"
+    key=f"filter_ano_{frc}"
 )
 ano_inicio, ano_fim = ano_range
 
@@ -262,7 +271,7 @@ generos_selecionados = st.sidebar.multiselect(
     options=lista_generos,
     default=[],
     placeholder="Todos os gêneros (padrão)",
-    key="filter_genero"
+    key=f"filter_genero_{frc}"
 )
 
 top_n = st.sidebar.slider(
@@ -271,7 +280,7 @@ top_n = st.sidebar.slider(
     max_value=50,
     value=15,
     step=5,
-    key="filter_top_n"
+    key=f"filter_top_n_{frc}"
 )
 
 # Filtros Contextuais conforme a aba selecionada
@@ -290,12 +299,12 @@ if categoria == "Críticas":
         value=1,
         step=1,
         help="Exige que o filme tenha avaliação em pelo menos 1, 2 ou 3 bases (IMDB, RT, Letterboxd)",
-        key="filter_min_fontes"
+        key=f"filter_min_fontes_{frc}"
     )
     busca_criticas = st.sidebar.text_input(
         "Buscar por Filme ou Diretor:",
         placeholder="Ex: Nolan, Godfather, Matrix...",
-        key="filter_busca_criticas"
+        key=f"filter_busca_criticas_{frc}"
     ).strip()
 
 elif categoria == "Dinheiro":
@@ -304,7 +313,7 @@ elif categoria == "Dinheiro":
     busca_dinheiro = st.sidebar.text_input(
         "Buscar Filme por Título:",
         placeholder="Ex: Titanic, Avatar, Avengers...",
-        key="filter_busca_dinheiro"
+        key=f"filter_busca_dinheiro_{frc}"
     ).strip()
 
 elif categoria == "Gênero":
@@ -316,17 +325,13 @@ elif categoria == "Gênero":
         max_value=30,
         value=10,
         step=5,
-        key="filter_top_generos"
+        key=f"filter_top_generos_{frc}"
     )
 
 st.sidebar.markdown("---")
 
 # Botão para Redefinir Filtros
-if st.sidebar.button("Redefinir Filtros", use_container_width=True):
-    for k in ["filter_ano", "filter_genero", "filter_top_n", "filter_min_fontes", "filter_busca_criticas", "filter_busca_dinheiro", "filter_top_generos"]:
-        if k in st.session_state:
-            del st.session_state[k]
-    st.rerun()
+st.sidebar.button("Redefinir Filtros", on_click=reset_filters, use_container_width=True)
 
 # Resumo dos filtros ativos na barra lateral
 filtros_ativos = []
